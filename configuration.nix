@@ -5,8 +5,12 @@
 { config, lib, pkgs, ... }:
 
 let  
+  unstable = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/nixpkgs-unstable.tar.gz";
+  }) {};
+  
   secrets = import ./secrets.nix;
-
+  
   kawaiiGrubTheme = pkgs.stdenv.mkDerivation {
     pname = "kawaii-grub";
     version = "latest";
@@ -25,6 +29,32 @@ in
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
     ];
+
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+  programs.hyprland.settings = {
+    decoration = {
+      rounding = 12;
+      active_opacity = 0.9;
+      inactive_opacity = 0.8;
+      
+      blur = {
+        enabled = true;
+        size = 6;
+        passes = 3;
+        new_optimizations = true;
+        ignore_opacity = true;
+      };
+    };
+
+    general = {
+      gaps_in = 6;
+      gaps_out = 12;
+      border_size = 2;
+      "col.active_border" = "ee6246ff ee9646ff 45deg"; # Оранжево-красный градиент под Caelestia
+      "col.inactive_border" = "rgba(595959aa)";
+    };
+  };
 
   # Use the systemd-boot EFI boot loader.
   # boot.loader.efi.canTouchEfiVariables = true;
@@ -81,11 +111,13 @@ in
   boot.loader = {
     systemd-boot.enable = false;
     efi.canTouchEfiVariables = true;
+    timeout = 10;
     grub = {
       enable = true;
       efiSupport = true;
       device = "nodev";
       useOSProber = true;
+      default = "2";
       
       theme = "${kawaiiGrubTheme}/kawaii-grub-theme";
       font = "${kawaiiGrubTheme}/kawaii-grub-theme/terminus-12.pf2";
@@ -141,7 +173,30 @@ in
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk}/share/dotnet";
   };
+  # ==== arduino ====
+  /*
+  programs.firejail = {
+    enable = true;
+    wrappedBinaries = {
+      arduino-ide = {
+        executable = "${pkgs.arduino-ide}/bin/arduino-ide";
+        extraArgs = [ "--net=none" ];
+      };
+    };
+  };
 
+  programs.firejail.wrappedBinaries = {
+    arduino-ide = {
+      executable = "${pkgs.arduino-ide}/bin/arduino-ide";
+      extraArgs = [ 
+        "--net=none" 
+        "--ignore=noroot"           # Критично для bwrap
+        "--unprivileged-userns"     # Позволяет создавать user namespaces
+        "--dbus-user=filter"        # Часто нужно для Electron
+      ];
+    };
+  };
+  */
 
   # ==== Bluetooth ====
 
@@ -156,17 +211,19 @@ in
     enable32Bit = true;
   };
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
   services.xserver.videoDrivers = [ "nvidia" ];
   nixpkgs.config.allowUnfree = true;
 
   hardware.nvidia = {
-    modesetting.enable = true;
     open = false;
     nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.beta;
+    package = config.boot.kernelPackages.nvidiaPackages.production;
 
+    powerManagement = {
+      finegrained = false;
+      enable = true;
+    };
+    
     prime = {
       offload = {
         enable = true;
@@ -209,6 +266,9 @@ in
     ln -sfT /nix/config /home/leshii/.config
     ln -sfT /nix/.ssh /home/leshii/.ssh
     ln -sfT /nix/.ollama/ /home/leshii/.ollama
+    ln -sfT /nix/.arduino/.arduino15 ~/.arduino15
+    ln -sfT /nix/.arduino/.arduinoIDE /home/leshii/.arduinoIDE
+    ln -sfT /nix/.arduino/Arduino /home/leshii/Arduino
     chown leshii /home/leshii -R
   '';
   # Define a user account. Don't forget to set a password with ‘passwd’.
@@ -216,7 +276,7 @@ in
   users.users.leshii = {
     initialPassword = secrets.sudoPassword;
     isNormalUser = true;
-    extraGroups = [ "wheel" "dialout" "audio"]; # Enable ‘sudo’ for the user.
+    extraGroups = [ "wheel" "dialout" "audio" "networkmanager" "video"]; # Enable ‘sudo’ for the user.
     packages = with pkgs; [
       tree
     ];
@@ -260,13 +320,18 @@ in
   # ==== Ollama and Local AI ====
   services.ollama = {
     enable = true;
+    package = unstable.ollama;
     acceleration = "cuda";
     home = "/home/leshii/.ollama";
     loadModels = [
       # models deepseek
+      "deepseek-r1:32b"
+      "deepseek-coder:6.7b"
+      "deepseek-coder:33b"
       "deepscaler:1.5b"
       "deepseek-r1:1.5b"
       "deepseek-r1:8b"
+      "t1c/deepseek-math-7b-rl:Q4"
       # model OpenAI
       "gpt-oss:20b"
       "openchat:7b"
@@ -276,18 +341,32 @@ in
       "mathstral:7b"
       # models google
       "translategemma:4b"
-      "gemma4:e4b" 
+      "bjoernb/gemma4-e2b-think:latest" 
+      "gemma4:e4b"
+      "gemma4:26b"
+      "gemma3:12b"
+      "translategemma:27b"
       # uncuncensored models
       "dolphin-mistral:7b"
       "wizardlm-uncensored:13b"
       "llama2-uncensored:7b"
       "dolphincoder:15b"
+      "gurubot/gpt-oss-derestricted:20b"
+      "aia/DeepSeek-R1-Distill-Qwen-32B-Uncensored-i1:latest"
+      "thirdeyeai/DeepSeek-R1-Distill-Qwen-7B-uncensored:Q8_0"
     ];                  
     syncModels = false;
   };
 
   systemd.services.ollama = {
     enable = true;
+    environment = {
+      LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
+        stdenv.cc.cc.lib
+        gfortran.cc.lib # Часто содержит зависимости для MLX/математики
+        linuxPackages.nvidia_x11 # На всякий случай для CUDA
+      ];
+    };
     serviceConfig = {
       DynamicUser = lib.mkForce false;
       User = "leshii";
@@ -296,7 +375,7 @@ in
       ProtectHome = lib.mkForce false;
     };
   };
-
+  
 
   # ==== htop ====
 
@@ -330,6 +409,13 @@ in
       bierner.github-markdown-preview
       ms-vscode.hexeditor
       ms-vscode.cpptools
+    ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
+      {
+        name = "language-gas-x86";
+        publisher = "basdp";
+        version = "0.0.2";
+        sha256 = "PbXhOsoR0/5wXuFrzwCcauM1uGgfQoSRTj0gPVVZ4Kg=";
+      }
     ];
   };
 
@@ -337,7 +423,7 @@ in
     vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     wget
 
-    nekoray
+    throne
     nftables
     iptables
 
@@ -377,6 +463,8 @@ in
     avra
     arduino-ide
     arduino-cli
+    avrdude     
+    # gcc-arm-embedded 
 
     # Веб разработка
     hugo
@@ -415,7 +503,19 @@ in
     vlc # Cross-platform media player and streaming server
     wayland-utils # Wayland utilities
     wl-clipboard # Command-line copy/paste utilities for Wayland
- 
+    # Тема и иконки
+    catppuccin-gtk
+    catppuccin-kvantum
+    papirus-icon-theme
+    
+    # Шрифты (обязательно для иконок в баре)
+    (nerdfonts.override { fonts = [ "JetBrainsMono" "MapleMono" ]; })
+    
+    # Компоненты интерфейса
+    waybar        # Стандартная и мощная панель
+    swww          # Для обоев с анимацией
+    swaynotificationcenter # Уведомления как на скриншоте
+    rofi-wayland  # Меню запуска приложений
   ];
 
   # Some programs need SUID wrappers, can be configured further or are

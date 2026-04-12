@@ -9,6 +9,8 @@ let
     url = "https://github.com/NixOS/nixpkgs/archive/nixpkgs-unstable.tar.gz";
   }) {};
   
+  # caelestia = (import /etc/nixos {}).inputs.caelestia-shell;
+  
   secrets = import ./secrets.nix;
   
   kawaiiGrubTheme = pkgs.stdenv.mkDerivation {
@@ -25,36 +27,54 @@ let
 in
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
+  imports = [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./modules/caelestia.nix
     ];
-
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-  programs.hyprland.settings = {
-    decoration = {
-      rounding = 12;
-      active_opacity = 0.9;
-      inactive_opacity = 0.8;
-      
-      blur = {
-        enabled = true;
-        size = 6;
-        passes = 3;
-        new_optimizations = true;
-        ignore_opacity = true;
-      };
-    };
-
-    general = {
-      gaps_in = 6;
-      gaps_out = 12;
-      border_size = 2;
-      "col.active_border" = "ee6246ff ee9646ff 45deg"; # Оранжево-красный градиент под Caelestia
-      "col.inactive_border" = "rgba(595959aa)";
-    };
+  
+  caelestia.enable = true;
+  
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
+
+
+
+  # === Huperland === 
+  # Включаем сам Hyprland
+  programs.hyprland.enable = true;
+
+  # Создаем файл конфигурации напрямую
+  environment.etc."hypr/hyprland.conf".text = ''
+    # Эффекты размытия и закругления
+    decoration {
+        rounding = 12
+        active_opacity = 0.9
+        inactive_opacity = 0.8
+
+        blur {
+            enabled = true
+            size = 6
+            passes = 3
+            new_optimizations = true
+            ignore_opacity = true
+        }
+    }
+
+    # Внешний вид окон
+    general {
+        gaps_in = 6
+        gaps_out = 12
+        border_size = 2
+        col.active_border = rgba(ee6246ff) rgba(ee9646ff) 45deg
+        col.inactive_border = rgba(595959aa)
+    }
+
+    # Автозапуск необходимых компонентов
+    exec-once = waybar & swww-daemon &
+  '';
+  fonts.fontconfig.enable = true;
 
   # Use the systemd-boot EFI boot loader.
   # boot.loader.efi.canTouchEfiVariables = true;
@@ -170,7 +190,22 @@ in
   };
 
 
+  programs.bash.enable = true;
+  # пример опций — точные имена опций смотрите в README модуля caelestia-dots/shell
+  # Примерные опции:
+  services.caelestiaShell = {
+    enable = true;
+    shell = "bash";
+    user = "leshii"; # ваш юзер
+    dotfiles = {
+      enable = true;
+    };
+  }
   environment.sessionVariables = {
+    WLR_NO_HARDWARE_CURSORS = "1";
+    LIBVA_DRIVER_NAME = "nvidia";
+    GBM_BACKEND = "drm-video-runtime";
+    __GLX_VENDOR_LIBRARY_NAME = "nvidia";
     DOTNET_ROOT = "${pkgs.dotnet-sdk}/share/dotnet";
   };
   # ==== arduino ====
@@ -269,6 +304,10 @@ in
     ln -sfT /nix/.arduino/.arduino15 ~/.arduino15
     ln -sfT /nix/.arduino/.arduinoIDE /home/leshii/.arduinoIDE
     ln -sfT /nix/.arduino/Arduino /home/leshii/Arduino
+    ln -sf ~/.local/share/caelestia/hypr ~/.config/hypr
+    ln -sf ~/.local/share/caelestia/foot ~/.config/foot
+    ln -sf ~/.local/share/caelestia/starship.toml ~/.config/starship.toml
+    ln -sf ~/.local/share/caelestia/shell/init.sh ~/.config/caelestia-init.sh
     chown leshii /home/leshii -R
   '';
   # Define a user account. Don't forget to set a password with ‘passwd’.
@@ -276,6 +315,8 @@ in
   users.users.leshii = {
     initialPassword = secrets.sudoPassword;
     isNormalUser = true;
+    home = "/home/leshii";
+    shell = pkgs.bash;
     extraGroups = [ "wheel" "dialout" "audio" "networkmanager" "video"]; # Enable ‘sudo’ for the user.
     packages = with pkgs; [
       tree
@@ -396,6 +437,8 @@ in
       right_meters = [ "RightCPUs2" "GPU" "Tasks" "LoadAverage" "CPUTemperature" ];
     };
   };
+  
+    users.users.root.initialPassword = "REPLACE_ME"; # change appropriately
 
   # ==== Visual Studio Code ==== 
   programs.vscode = {
@@ -509,13 +552,12 @@ in
     papirus-icon-theme
     
     # Шрифты (обязательно для иконок в баре)
-    (nerdfonts.override { fonts = [ "JetBrainsMono" "MapleMono" ]; })
-    
-    # Компоненты интерфейса
+    nerd-fonts.jetbrains-mono
+    # nerd-fonts.maple-mono  # Добавили "-mono"
     waybar        # Стандартная и мощная панель
     swww          # Для обоев с анимацией
     swaynotificationcenter # Уведомления как на скриншоте
-    rofi-wayland  # Меню запуска приложений
+    rofi  # Меню запуска приложений
   ];
 
   # Some programs need SUID wrappers, can be configured further or are

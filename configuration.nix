@@ -32,29 +32,31 @@ in
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  programs.hyprland.settings = {
-    decoration = {
-      rounding = 12;
-      active_opacity = 0.9;
-      inactive_opacity = 0.8;
-      
-      blur = {
-        enabled = true;
-        size = 6;
-        passes = 3;
-        new_optimizations = true;
-        ignore_opacity = true;
-      };
-    };
+  programs.dms-shell.enable = true;
 
-    general = {
-      gaps_in = 6;
-      gaps_out = 12;
-      border_size = 2;
-      "col.active_border" = "ee6246ff ee9646ff 45deg"; # Оранжево-красный градиент под Caelestia
-      "col.inactive_border" = "rgba(595959aa)";
-    };
-  };
+  # programs.hyprland.settings = {
+  #   decoration = {
+  #     rounding = 12;
+  #     active_opacity = 0.9;
+  #     inactive_opacity = 0.8;
+      
+  #     blur = {
+  #       enabled = true;
+  #       size = 6;
+  #       passes = 3;
+  #       new_optimizations = true;
+  #       ignore_opacity = true;
+  #     };
+  #   };
+
+  #   general = {
+  #     gaps_in = 6;
+  #     gaps_out = 12;
+  #     border_size = 2;
+  #     "col.active_border" = "ee6246ff ee9646ff 45deg"; # Оранжево-красный градиент под Caelestia
+  #     "col.inactive_border" = "rgba(595959aa)";
+  #   };
+  # };
 
   # Use the systemd-boot EFI boot loader.
   # boot.loader.efi.canTouchEfiVariables = true;
@@ -76,17 +78,17 @@ in
       };
     };
 
-    "Work-WiFi" = {
-      connection = { id = "Work-WiFi"; type = "wifi"; };
-      wifi = { ssid = secrets.workSsid; };
-      wifi-security = { key-mgmt = "wpa-eap"; };
-      "802-1x" = {
-        eap = "peap";
-        identity = secrets.workLogin;
-        password = secrets.workPass;
-        phase2-auth = "mschapv2";
-      };
-    };
+    # "Work-WiFi" = {
+    #   connection = { id = "Work-WiFi"; type = "wifi"; };
+    #   wifi = { ssid = secrets.workSsid; };
+    #   wifi-security = { key-mgmt = "wpa-eap"; };
+    #   "802-1x" = {
+    #     eap = "peap";
+    #     identity = secrets.workLogin;
+    #     password = secrets.workPass;
+    #     phase2-auth = "mschapv2";
+    #   };
+    # };
   };
 
   
@@ -320,8 +322,7 @@ in
   # ==== Ollama and Local AI ====
   services.ollama = {
     enable = true;
-    package = unstable.ollama;
-    acceleration = "cuda";
+    package = pkgs.ollama-cuda;
     home = "/home/leshii/.ollama";
     loadModels = [
       # models deepseek
@@ -363,8 +364,8 @@ in
     environment = {
       LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
         stdenv.cc.cc.lib
-        gfortran.cc.lib # Часто содержит зависимости для MLX/математики
-        linuxPackages.nvidia_x11 # На всякий случай для CUDA
+        gfortran.cc.lib 
+        linuxPackages.nvidia_x11 
       ];
     };
     serviceConfig = {
@@ -507,16 +508,14 @@ in
     catppuccin-gtk
     catppuccin-kvantum
     papirus-icon-theme
-    
-    # Шрифты (обязательно для иконок в баре)
-    (nerdfonts.override { fonts = [ "JetBrainsMono" "MapleMono" ]; })
-    
+      
     # Компоненты интерфейса
     waybar        # Стандартная и мощная панель
     swww          # Для обоев с анимацией
     swaynotificationcenter # Уведомления как на скриншоте
-    rofi-wayland  # Меню запуска приложений
+    rofi # Меню запуска приложений
   ];
+  # 
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.

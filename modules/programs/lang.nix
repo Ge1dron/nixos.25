@@ -31,15 +31,14 @@ in
       avrdude     
 
       # graphics libraries 
-
-      python3Packages.glad  # <-- Исправлено имя пакета GLAD
-      glfw.dev         # <-- ИСПРАВЛЕНО: Добавили .out для glfw 
+      python3Packages.glad  
+      glfw.dev          
       glew.dev
-      freeglut.dev      # <-- Добавлено .dev
-      libGLU.dev       # <-- Добавлено .dev
-      libglvnd.dev     # <-- ИСПРАВЛЕНО: Добавили .dev для gl.h
-      faad2.dev       # <-- ИСПРАВЛЕНО: Добавили .dev для faad.h
-      
+      freeglut.dev    
+      libGLU.dev
+      libglvnd.dev    
+      faad2.dev       
+
       # Веб разработка
       hugo
       go

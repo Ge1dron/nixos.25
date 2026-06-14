@@ -11,13 +11,13 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = with pkgs; [
-    (prismlauncher.override {
-      jdks = [
-        temurin-bin-21
-        temurin-bin-8
-        temurin-bin-17
-      ];
-    })
+      (prismlauncher.override {
+        jdks = [
+          temurin-bin-21
+          temurin-bin-8
+          temurin-bin-17
+        ];
+      })
       # Пакеты Steam и Gamescope
       steam
       gamescope

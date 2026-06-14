@@ -5,30 +5,19 @@
 { config, lib, pkgs, ... }:
 
 let  
+  secrets = import ./secrets.nix;
+
   unstable = import (builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/nixpkgs-unstable.tar.gz";
   }) {};
-  
-  secrets = import ./secrets.nix;
-  
-  kawaiiGrubTheme = pkgs.stdenv.mkDerivation {
-    pname = "kawaii-grub";
-    version = "latest";
-    src = pkgs.fetchFromGitHub {
-      owner = "Gabbar-v7";
-      repo = "KawaiiGRUB";
-      rev = "master";
-      sha256 = "sha256-vc6u93odDXVWBAAAi+r9fGlBp0qiVzzXy8IL6H8WLjo=";
-    };
-    installPhase = "mkdir -p $out && cp -r ./* $out/";
-  };
 in
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
+  imports = [ 
+    ./modules
+    ./hardware-configuration.nix
+  ];
+
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
@@ -64,34 +53,7 @@ in
   # networking.hostName = "nixos"; # Define your hostname.
 
   # Configure network connections interactively with nmcli or nmtui.
-  networking.networkmanager.enable = true;
-    networking.networkmanager.ensureProfiles.profiles = {
-    
-    "Home-WiFi" = {
-      connection = { id = "Home-WiFi"; type = "wifi"; };
-      wifi = { 
-        ssid = secrets.homeSsid; 
-      };
-      wifi-security = { 
-        key-mgmt = "wpa-psk"; 
-        psk = secrets.homePass; 
-      };
-    };
 
-    # "Work-WiFi" = {
-    #   connection = { id = "Work-WiFi"; type = "wifi"; };
-    #   wifi = { ssid = secrets.workSsid; };
-    #   wifi-security = { key-mgmt = "wpa-eap"; };
-    #   "802-1x" = {
-    #     eap = "peap";
-    #     identity = secrets.workLogin;
-    #     password = secrets.workPass;
-    #     phase2-auth = "mschapv2";
-    #   };
-    # };
-  };
-
-  
   # Set your time zone.
   time.timeZone = "Europe/Moscow";
 
@@ -108,50 +70,6 @@ in
   # };
 
   # Enable the X11 windowing system.
-  # ==== GRUB ====
-
-  boot.loader = {
-    systemd-boot.enable = false;
-    efi.canTouchEfiVariables = true;
-    timeout = 10;
-    grub = {
-      enable = true;
-      efiSupport = true;
-      device = "nodev";
-      useOSProber = true;
-      default = "2";
-      
-      theme = "${kawaiiGrubTheme}/kawaii-grub-theme";
-      font = "${kawaiiGrubTheme}/kawaii-grub-theme/terminus-12.pf2";
-
-      gfxmodeEfi = "1920x1080"; 
-      gfxpayloadEfi = "keep"; 
-
-      extraConfig = ''
-        insmod all_video
-        insmod gfxterm
-        insmod png
-        insmod jpeg
-        insmod ext2
-        
-        search --set=root --file /nix/store/84xaqbisw1g9qb2fac8ygm8fq4xq0rcz-kawaii-grub-latest/kawaii-grub-theme/theme.txt
-
-        terminal_output gfxterm
-        
-        menuentry "UEFI Firmware Settings" --class efi {
-          fwsetup
-        }
-      '';
-    };
-  };
-
-  # ==== proxy client ====
-  programs = {
-    throne.enable = true;
-    throne.tunMode.enable = true;
-  };
-  
-  services.resolved.enable = true;
 
   services = {
     desktopManager.plasma6.enable = true;
@@ -162,43 +80,9 @@ in
   # Configure keymap in X11
   # services.xserver.xkb.layout = "us";
   # services.xserver.xkb.options = "eurosign:e,caps:escape";
-  # === Steam ===
   # services.xserver.displayManager.lightdm.enable = true;
   services.xserver.enable = true;
-  programs.steam.gamescopeSession.enable = false;
-  programs.gamescope = {
-    enable = true;
-    capSysNice = true;
-  };
 
-
-  environment.sessionVariables = {
-    DOTNET_ROOT = "${pkgs.dotnet-sdk}/share/dotnet";
-  };
-  # ==== arduino ====
-  /*
-  programs.firejail = {
-    enable = true;
-    wrappedBinaries = {
-      arduino-ide = {
-        executable = "${pkgs.arduino-ide}/bin/arduino-ide";
-        extraArgs = [ "--net=none" ];
-      };
-    };
-  };
-
-  programs.firejail.wrappedBinaries = {
-    arduino-ide = {
-      executable = "${pkgs.arduino-ide}/bin/arduino-ide";
-      extraArgs = [ 
-        "--net=none" 
-        "--ignore=noroot"           # Критично для bwrap
-        "--unprivileged-userns"     # Позволяет создавать user namespaces
-        "--dbus-user=filter"        # Часто нужно для Electron
-      ];
-    };
-  };
-  */
 
   # ==== Bluetooth ====
 
@@ -207,46 +91,8 @@ in
 
   services.blueman.enable = true;
 
-  # === NVIDIA CONFIGURATION FOR LAPTOP ===
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true;
-  };
-
-  services.xserver.videoDrivers = [ "nvidia" ];
-  nixpkgs.config.allowUnfree = true;
-
-  hardware.nvidia = {
-    open = false;
-    nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.production;
-
-    powerManagement = {
-      finegrained = false;
-      enable = true;
-    };
-    
-    prime = {
-      offload = {
-        enable = true;
-        enableOffloadCmd = true;
-      };
-      # Make sure to use the correct Bus ID values for your system!
-      intelBusId = "PCI:0:2:0";
-      nvidiaBusId = "PCI:1:0:0";
-      # amdgpuBusId = "PCI:54:0:0"; For AMD GPU
-    };
-  };
-  # === END OF NVIDIA CONFIGURATION ===
-
-
-
-    # Enable CUPS to print documents.
-    # services.printing.enable = true;
-
-    # Enable sound.
-    # services.pulseaudio.enable = true;
-    # OR
+  # services.pulseaudio.enable = true;
+  # OR
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
@@ -254,6 +100,7 @@ in
     alsa.support32Bit = true;
     pulse.enable = true;
     jack.enable = true;
+    wireplumber.enable = true; # Используется как менеджер сессий
   };
 
 
@@ -263,11 +110,12 @@ in
   /*ln -sfT /nix/ollamaModels/models /var/lib/ollama/models/*/
   system.activationScripts.restore = ''
     ln -sfT /nix/book\ and\ info /home/leshii/Books\ and\ info
+    ln -sfT /nix/wine /home/leshii/.wine
     ln -sfT /nix/Steam /home/leshii/.local/share/Steam
     ln -sfT /nix/.steam /home/leshii/.steam
     ln -sfT /nix/config /home/leshii/.config
     ln -sfT /nix/.ssh /home/leshii/.ssh
-    ln -sfT /nix/.ollama/ /home/leshii/.ollama
+    ln -sfT /nix/.ollama/ /var/lib/ollama
     ln -sfT /nix/.arduino/.arduino15 ~/.arduino15
     ln -sfT /nix/.arduino/.arduinoIDE /home/leshii/.arduinoIDE
     ln -sfT /nix/.arduino/Arduino /home/leshii/Arduino
@@ -278,147 +126,41 @@ in
   users.users.leshii = {
     initialPassword = secrets.sudoPassword;
     isNormalUser = true;
-    extraGroups = [ "wheel" "dialout" "audio" "networkmanager" "video"]; # Enable ‘sudo’ for the user.
+    extraGroups = [ "wheel" "dialout" "audio" "networkmanager" "video" ]; # Enable ‘sudo’ for the user.
     packages = with pkgs; [
       tree
     ];
   };
 
-  programs.firefox.enable = true;
-  programs.git = {
-    enable = true;
-    config = {
-      init.defaultBranch = "main";
-      user.email = "shishkov.dimentr@inbox.ru";
-      user.name = "leshii";
-      diff = {
-        algorithm = "histogram";
-        colorMoved = "plain";
-        mnemonicPrefix = true;
-        renames = true;
-      };
-      push = {
-        autoSetupRemote = true;
-        default = "simple";
-        followTags = true;
-      };
-      rebase = {
-        autoSquash = true;
-        autoStash = true;
-        updateRefs = true;
-      };
-    };
-  };
+  # programs.firefox.enable = true;
+
   programs.niri.enable = true;
   # List packages installed in system profile.
   # You can use https://search.nixos.org/ to find more packages (and options).
-
-  programs.steam = {
-    enable = true;
-    remotePlay.openFirewall = true;
-    dedicatedServer.openFirewall = true;
-  };
-
-  # ==== Ollama and Local AI ====
-  services.ollama = {
-    enable = true;
-    package = pkgs.ollama-cuda;
-    home = "/home/leshii/.ollama";
-    loadModels = [
-      # models deepseek
-      "deepseek-r1:32b"
-      "deepseek-coder:6.7b"
-      "deepseek-coder:33b"
-      "deepscaler:1.5b"
-      "deepseek-r1:1.5b"
-      "deepseek-r1:8b"
-      "t1c/deepseek-math-7b-rl:Q4"
-      # model OpenAI
-      "gpt-oss:20b"
-      "openchat:7b"
-      # model Meta
-      "llama3.2:3b"
-      # model Mistral
-      "mathstral:7b"
-      # models google
-      "translategemma:4b"
-      "bjoernb/gemma4-e2b-think:latest" 
-      "gemma4:e4b"
-      "gemma4:26b"
-      "gemma3:12b"
-      "translategemma:27b"
-      # uncuncensored models
-      "dolphin-mistral:7b"
-      "wizardlm-uncensored:13b"
-      "llama2-uncensored:7b"
-      "dolphincoder:15b"
-      "gurubot/gpt-oss-derestricted:20b"
-      "aia/DeepSeek-R1-Distill-Qwen-32B-Uncensored-i1:latest"
-      "thirdeyeai/DeepSeek-R1-Distill-Qwen-7B-uncensored:Q8_0"
-    ];                  
-    syncModels = false;
-  };
-
-  systemd.services.ollama = {
-    enable = true;
-    environment = {
-      LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
-        stdenv.cc.cc.lib
-        gfortran.cc.lib 
-        linuxPackages.nvidia_x11 
-      ];
-    };
-    serviceConfig = {
-      DynamicUser = lib.mkForce false;
-      User = "leshii";
-      WorkingDirectory = "/home/leshii/.ollama";
-      ReadWritePaths = [ "/home/leshii/.ollama" "/home/leshii/.ollama/models" ];
-      ProtectHome = lib.mkForce false;
-    };
-  };
   
-
+  
   # ==== htop ====
+  programs = {
+    htop = {
+      enable = true;
+      settings = {
+        show_program_path = true;
+        hide_threads = true;
+        hide_kernel_threads = true;
+        delay = 15;
 
-  programs.htop = {
-    enable = true;
-    settings = {
-      show_program_path = true;
-      hide_threads = true;
-      hide_kernel_threads = true;
-      delay = 15;
+        show_cpu_temperature = true;
+        show_gpu_temperature = true;
+        show_cpu_frequency = true;
+        show_gpu_frequency = true;
 
-      show_cpu_temperature = true;
-      show_gpu_temperature = true;
-      show_cpu_frequency = true;
-      show_gpu_frequency = true;
-
-      left_meters = [ "LeftCPUs2" "Memory" "Swap" "DiskIO" "Tasks" "LoadAverage" "GPUTemperature"];
-      right_meters = [ "RightCPUs2" "GPU" "Tasks" "LoadAverage" "CPUTemperature" ];
+        left_meters = [ "LeftCPUs2" "Memory" "Swap" "DiskIO" "Tasks" "LoadAverage" "GPUTemperature"];
+        right_meters = [ "RightCPUs2" "GPU" "Tasks" "LoadAverage" "CPUTemperature" ];
+      };
     };
-  };
+  };  
 
-  # ==== Visual Studio Code ==== 
-  programs.vscode = {
-    enable = true;
-    extensions = with pkgs.vscode-extensions; [
-      arcticicestudio.nord-visual-studio-code
-      yzhang.markdown-all-in-one
-      bbenoist.nix
-      xaver.clang-format
-      fortran-lang.linter-gfortran
-      bierner.github-markdown-preview
-      ms-vscode.hexeditor
-      ms-vscode.cpptools
-    ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
-      {
-        name = "language-gas-x86";
-        publisher = "basdp";
-        version = "0.0.2";
-        sha256 = "PbXhOsoR0/5wXuFrzwCcauM1uGgfQoSRTj0gPVVZ4Kg=";
-      }
-    ];
-  };
+
 
   environment.systemPackages = with pkgs;  [
     vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
@@ -428,12 +170,8 @@ in
     nftables
     iptables
 
-    # wine
-    wineWowPackages.stable
-    wine64
-    libkrb5
-    winetricks
-    wineWowPackages.waylandFull
+
+    mangohud
     samba
     krb5
 
@@ -452,28 +190,8 @@ in
     telegram-desktop
     discord
 
-    nodejs_24
-
-    # Компиляторы и среды для матана
-    gfortran13
-    octave
-
-    # Компиляторы для низкого уровня программирования
-    gdb
-    gcc
-    avra
-    arduino-ide
-    arduino-cli
-    avrdude     
-    # gcc-arm-embedded 
-
-    # Веб разработка
-    hugo
-    go
-    caddy
-    xray
-    nix-ld
     htop
+    fastfetch
 
     ruby
     dotnet-sdk
@@ -483,9 +201,6 @@ in
     scrcpy
     qpwgraph
     blender
-
-    steam
-    gamescope
 
     # KDE
     kdePackages.discover # Optional: Install if you use Flatpak or fwupd firmware update sevice
@@ -511,7 +226,7 @@ in
       
     # Компоненты интерфейса
     waybar        # Стандартная и мощная панель
-    swww          # Для обоев с анимацией
+    awww          # Для обоев с анимацией
     swaynotificationcenter # Уведомления как на скриншоте
     rofi # Меню запуска приложений
   ];
